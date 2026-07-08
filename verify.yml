@@ -1,0 +1,71 @@
+name: Verify Base Contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts.json"
+      - "src/**"
+  workflow_dispatch:
+    inputs:
+      address:
+        description: "Contract address (overrides contracts.json, optional)"
+        required: false
+        type: string
+      contract_path:
+        description: "Path in the form src/File.sol:ContractName (required if address is set)"
+        required: false
+        type: string
+      constructor_args:
+        description: "ABI-encoded constructor arguments (hex, optional)"
+        required: false
+        type: string
+      network:
+        description: "Base network"
+        required: false
+        type: choice
+        default: "base"
+        options:
+          - base
+          - base_sepolia
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build contracts
+        run: forge build
+
+      # Manual run for a single address (workflow_dispatch)
+      - name: Verify single contract (manual input)
+        if: github.event_name == 'workflow_dispatch' && inputs.address != ''
+        env:
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+        run: |
+          CMD=(forge verify-contract
+            "${{ inputs.address }}"
+            "${{ inputs.contract_path }}"
+            --chain "${{ inputs.network }}"
+            --verifier etherscan
+            --etherscan-api-key "$BLOCKSCOUT_API_KEY"
+            --watch)
+          if [ -n "${{ inputs.constructor_args }}" ]; then
+            CMD+=(--constructor-args "${{ inputs.constructor_args }}")
+          fi
+          "${CMD[@]}"
+
+      # Automatic run from contracts.json (push or manual without address)
+      - name: Verify contracts from contracts.json
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.address == '')
+        env:
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+        run: bash verify.sh contracts.json

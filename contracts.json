@@ -1,0 +1,11 @@
+{
+  "network": "base",
+  "contracts": [
+    {
+      "name": "Counter",
+      "path": "src/Counter.sol:Counter",
+      "address": "",
+      "constructorArgs": ""
+    }
+  ]
+}
